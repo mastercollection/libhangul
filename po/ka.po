@@ -1,0 +1,139 @@
+# Georgian translation for libhangul.
+# Copyright (C) 2026 Free Software Foundation, Inc.
+# This file is distributed under the same license as the libhangul package.
+# Ekaterine Papava <papava.e@gtu.ge>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: libhangul 0.2.0\n"
+"Report-Msgid-Bugs-To: https://github.com/libhangul/libhangul\n"
+"POT-Creation-Date: 2025-05-06 04:59+0200\n"
+"PO-Revision-Date: 2026-01-15 07:47+0100\n"
+"Last-Translator: Ekaterine Papava <papava.e@gtu.ge>\n"
+"Language-Team: Georgian <(nothing)>\n"
+"Language: ka\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.8\n"
+
+#: hangul/hangulkeyboard.c:135
+msgid "Dubeolsik"
+msgstr "დუბეოლსკი"
+
+#: hangul/hangulkeyboard.c:144
+msgid "Dubeolsik Yetgeul"
+msgstr "დუბეოლსკი იესგეული"
+
+#: hangul/hangulkeyboard.c:153
+msgid "Sebeolsik Dubeol Layout"
+msgstr "Sebeolsik Dubeol განლაგება"
+
+#: hangul/hangulkeyboard.c:162
+msgid "Sebeolsik 390"
+msgstr "Sebeolsik 390"
+
+#: hangul/hangulkeyboard.c:171
+msgid "Sebeolsik Final"
+msgstr "Sebeolsik საბოლოო"
+
+#: hangul/hangulkeyboard.c:180
+msgid "Sebeolsik Noshift"
+msgstr "Sebeolsik Noshift"
+
+#: hangul/hangulkeyboard.c:189
+msgid "Sebeolsik Yetgeul"
+msgstr "Sebeolsik Yetgeul"
+
+#: hangul/hangulkeyboard.c:198
+msgid "Romaja"
+msgstr "რომაჯა"
+
+#: hangul/hangulkeyboard.c:207
+msgid "Ahnmatae"
+msgstr "აჰნმატაე"
+
+#: tools/hangul.c:72
+#, c-format
+msgid "Usage: %s [OPTION]... [FILE]...\n"
+msgstr "გამოყენება: %s [პარამეტრი].. [ფაილი]...\n"
+
+#: tools/hangul.c:76
+msgid ""
+"Convert string into korean characters according to korean keyboard "
+"layout.\n"
+"\n"
+"Mandatory arguments to long options are mandatory for short options "
+"too.\n"
+"  -k, --keyboard=KEYBOARDID   select keyboard layout by KEYBOARDID\n"
+"  -l, --list                  list available keyboard and exit\n"
+"  -i, --input=STRING          use STRING as input instead of standard "
+"input\n"
+"  -o, --output=FILE           write result to FILE instead of standard "
+"output\n"
+"  -s, --strict-order          do not allow wrong input sequence\n"
+msgstr ""
+"სტრიქონის გადაყვანა კორეულ სიმბოლოებში კორეული კლავიატურის განლაგების "
+"მიხედვით.\n"
+"\n"
+"არგუმენტები, რომლებიც აუცილებელია გრძელი პარამეტრებისთვის, ასევე "
+"აუცილებელია მოკლეებისთვისაც.\n"
+"  -k, --keyboard=KEYBOARDID   კლავიატურის განლაგების არჩევა KEYBOARDID-"
+"ის მიხედვით\n"
+"  -l, --list                  ხელმისაწვდომი კლავიატურების სიის "
+"გამოტანა და გასვლა\n"
+"  -i, --input=STRING          მითითებული სტრიქონის გამოყენება "
+"შეყვანისთვის სტანდარტული შეყვანის მაგიერ\n"
+"  -o, --output=FILE           მითითებულ ფაილში ჩაწერა სტანდარტულ "
+"გამოტანაზე ჩვენების მაგიერ\n"
+"  -s, --strict-order          არასწორი შეყვანის მიმდევრობები დაშვებული "
+"არ იქნება\n"
+
+#: tools/hangul.c:87
+msgid ""
+"      --help                  display this help and exit\n"
+"      --version               output version information and exit\n"
+msgstr ""
+"      --help                  ამ დახმარების გამოტანა და გასვლა\n"
+"      --version               ვერსიის ინფორმაციის გამოტანა და გასვლა\n"
+
+#: tools/hangul.c:92
+msgid ""
+"\n"
+"With no FILE, or when FILE is -, read standard input.\n"
+msgstr ""
+"\n"
+"როცა ფაილი არ არსებობს ან '-'-ია, წაკითხვა stdin-დან მოხდება.\n"
+
+#: tools/hangul.c:97
+#, c-format
+msgid ""
+"\n"
+"Examples:\n"
+"  %s -i gksrmfdlqfur  Convert specified string into korean characters\n"
+"                          and print them to standard output.\n"
+"  %s                  Convert standard input into korean characters\n"
+"                          and print them to standard output.\n"
+msgstr ""
+"\n"
+"მაგალითები:\n"
+"  %s -i gksrmfdlqfur  მითითებული სტრიქონის გადაყვანა კორეულ "
+"სიმბოლოებში\n"
+"                          და მათი ჩვენება სტანდარტულ გამოტანაზე.\n"
+"  %s                  სტანდარტული შეყვანის გადაყვანა კორეულ "
+"სიმბოლოებში\n"
+"                          და მათი ჩვენება სტანდარტულ გამოტანაზე.\n"
+
+#: tools/hangul.c:107
+#, c-format
+msgid "Try `%s --help' for more information.\n"
+msgstr "მეტი ინფორმაციისთვის სცადეთ '%s --help'\n"
+
+#: tools/hangul.c:237 tools/hangul.c:276
+msgid "standard output"
+msgstr "სტანდარტული გამოტანა"
+
+#: tools/hangul.c:358
+#, c-format
+msgid "conversion from %s to UTF-8"
+msgstr "გადაყვანა %s-დან UTF-8-ში"
