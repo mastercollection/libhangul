@@ -30,3 +30,13 @@ set_target_properties(tool-hangul
 target_link_libraries(tool-hangul
     LINK_PRIVATE hangul
 )
+
+add_executable(tool-hanjac
+    hanjac.c
+)
+set_target_properties(tool-hanjac
+    PROPERTIES OUTPUT_NAME hanjac
+)
+target_link_libraries(tool-hanjac
+    LINK_PRIVATE hangul
+)

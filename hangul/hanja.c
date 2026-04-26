@@ -170,16 +170,34 @@ struct _HanjaList {
 };
 
 struct _HanjaIndex {
-    unsigned offset;
-    char     key[8];
+    unsigned       offset;
+    unsigned       count;
+    const char*    key;
 };
 
 struct _HanjaTable {
+    Hanja**        entries;
+    unsigned       nentries;
+    unsigned       entries_alloc;
+    const Hanja**  key_entries;
     HanjaIndex*    keytable;
     unsigned       nkeys;
-    unsigned       key_size;
+    const Hanja**  value_entries;
+    HanjaIndex*    valuetable;
+    unsigned       nvalues;
     FILE*          file;
 };
+
+typedef struct _HanjaBinaryHeader {
+    char           magic[8];
+    uint32_t       version;
+    uint32_t       flags;
+    uint64_t       source_hash;
+    uint32_t       entry_count;
+} HanjaBinaryHeader;
+
+static const char hanja_binary_magic[8] = {'H', 'J', 'B', 'I', 'N', '1', '\0', '\0'};
+static const uint32_t hanja_binary_version = 1;
 
 struct _HanjaPair {
     ucschar first;
@@ -277,6 +295,219 @@ static void
 hanja_delete(Hanja* hanja)
 {
     free(hanja);
+}
+
+const char*
+hanja_get_key(const Hanja* hanja);
+
+const char*
+hanja_get_value(const Hanja* hanja);
+
+const char*
+hanja_get_comment(const Hanja* hanja);
+
+static int
+compare_hanja_key(const void* a, const void* b)
+{
+    const Hanja* left = *(const Hanja* const*)a;
+    const Hanja* right = *(const Hanja* const*)b;
+    return strcmp(hanja_get_key(left), hanja_get_key(right));
+}
+
+static int
+compare_hanja_value(const void* a, const void* b)
+{
+    const Hanja* left = *(const Hanja* const*)a;
+    const Hanja* right = *(const Hanja* const*)b;
+    return strcmp(hanja_get_value(left), hanja_get_value(right));
+}
+
+static HanjaTable*
+hanja_table_new(void)
+{
+    return calloc(1, sizeof(HanjaTable));
+}
+
+static int
+hanja_table_append_entry(HanjaTable* table, const char* key, const char* value,
+                         const char* comment)
+{
+    Hanja* hanja;
+    Hanja** entries;
+    unsigned alloc;
+
+    if (table == NULL || key == NULL || value == NULL)
+	return FALSE;
+
+    if (table->nentries == table->entries_alloc) {
+	alloc = table->entries_alloc == 0 ? 256 : table->entries_alloc * 2;
+	entries = realloc(table->entries, alloc * sizeof(table->entries[0]));
+	if (entries == NULL)
+	    return FALSE;
+	table->entries = entries;
+	table->entries_alloc = alloc;
+    }
+
+    hanja = hanja_new(key, value, comment);
+    if (hanja == NULL)
+	return FALSE;
+
+    table->entries[table->nentries++] = hanja;
+    return TRUE;
+}
+
+static int
+hanja_table_build_index_for_entries(const Hanja** sorted_entries,
+				    unsigned nentries,
+				    HanjaIndex** index_out,
+				    unsigned* count_out,
+				    int by_value)
+{
+    HanjaIndex* index;
+    unsigned count = 0;
+    unsigned i;
+    unsigned item = 0;
+    const char* previous = NULL;
+
+    if (index_out == NULL || count_out == NULL)
+	return FALSE;
+
+    *index_out = NULL;
+    *count_out = 0;
+
+    if (nentries == 0)
+	return TRUE;
+
+    for (i = 0; i < nentries; ++i) {
+	const char* key = by_value ? hanja_get_value(sorted_entries[i])
+				   : hanja_get_key(sorted_entries[i]);
+	if (previous == NULL || strcmp(previous, key) != 0) {
+	    ++count;
+	    previous = key;
+	}
+    }
+
+    index = calloc(count, sizeof(index[0]));
+    if (index == NULL)
+	return FALSE;
+
+    previous = NULL;
+    for (i = 0; i < nentries; ++i) {
+	const char* key = by_value ? hanja_get_value(sorted_entries[i])
+				   : hanja_get_key(sorted_entries[i]);
+	if (previous == NULL || strcmp(previous, key) != 0) {
+	    if (item > 0)
+		index[item - 1].count = i - index[item - 1].offset;
+	    index[item].offset = i;
+	    index[item].key = key;
+	    ++item;
+	    previous = key;
+	}
+    }
+    index[item - 1].count = nentries - index[item - 1].offset;
+
+    *index_out = index;
+    *count_out = count;
+    return TRUE;
+}
+
+static int
+hanja_table_build_indexes(HanjaTable* table)
+{
+    if (table == NULL)
+	return FALSE;
+
+    free(table->key_entries);
+    free(table->keytable);
+    free(table->value_entries);
+    free(table->valuetable);
+    table->key_entries = NULL;
+    table->keytable = NULL;
+    table->value_entries = NULL;
+    table->valuetable = NULL;
+    table->nkeys = 0;
+    table->nvalues = 0;
+
+    if (table->nentries == 0)
+	return TRUE;
+
+    table->key_entries = malloc(table->nentries * sizeof(table->key_entries[0]));
+    table->value_entries = malloc(table->nentries * sizeof(table->value_entries[0]));
+    if (table->key_entries == NULL || table->value_entries == NULL)
+	return FALSE;
+
+    memcpy(table->key_entries, table->entries,
+	   table->nentries * sizeof(table->key_entries[0]));
+    memcpy(table->value_entries, table->entries,
+	   table->nentries * sizeof(table->value_entries[0]));
+    qsort(table->key_entries, table->nentries, sizeof(table->key_entries[0]),
+	  compare_hanja_key);
+    qsort(table->value_entries, table->nentries,
+	  sizeof(table->value_entries[0]), compare_hanja_value);
+
+    if (!hanja_table_build_index_for_entries(table->key_entries, table->nentries,
+					     &table->keytable, &table->nkeys,
+					     FALSE))
+	return FALSE;
+
+    if (!hanja_table_build_index_for_entries(table->value_entries, table->nentries,
+					     &table->valuetable, &table->nvalues,
+					     TRUE))
+	return FALSE;
+
+    return TRUE;
+}
+
+static HanjaIndex*
+hanja_table_find_index(HanjaIndex* index, unsigned count, const char* key)
+{
+    int low;
+    int high;
+
+    if (index == NULL || key == NULL || count == 0)
+	return NULL;
+
+    low = 0;
+    high = (int)count - 1;
+    while (low <= high) {
+	int mid = low + (high - low) / 2;
+	int res = strcmp(index[mid].key, key);
+	if (res < 0)
+	    low = mid + 1;
+	else if (res > 0)
+	    high = mid - 1;
+	else
+	    return &index[mid];
+    }
+
+    return NULL;
+}
+
+static uint64_t
+hanja_file_hash(const char* filename)
+{
+    FILE* file;
+    uint64_t hash = 1469598103934665603ULL;
+    unsigned char buffer[4096];
+    size_t read_size;
+
+    if (filename == NULL)
+	return 0;
+
+    file = fopen(filename, "rb");
+    if (file == NULL)
+	return 0;
+
+    while ((read_size = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+	size_t i;
+	for (i = 0; i < read_size; ++i) {
+	    hash ^= buffer[i];
+	    hash *= 1099511628211ULL;
+	}
+    }
+
+    fclose(file);
+    return hash;
 }
 
 /**
@@ -406,59 +637,27 @@ static void
 hanja_table_match(const HanjaTable* table,
 		  const char* key, HanjaList** list)
 {
-    int low, high, mid;
-    int res = -1;
+    HanjaIndex* index;
+    unsigned i;
 
-    low = 0;
-    high = table->nkeys - 1;
+    if (table == NULL || key == NULL || list == NULL)
+	return;
 
-    while (low < high) {
-	mid = (low + high) / 2;
-	res = strncmp(table->keytable[mid].key, key, table->key_size);
-	if (res < 0) {
-	    low = mid + 1;
-	} else if (res > 0) {
-	    high = mid - 1;
-	} else {
-	    break;
-	}
-    }
+    index = hanja_table_find_index(table->keytable, table->nkeys, key);
+    if (index == NULL)
+	return;
 
-    if (res != 0) {
-	mid = low;
-	res = strncmp(table->keytable[mid].key, key, table->key_size);
-    }
+    if (*list == NULL)
+	*list = hanja_list_new(key);
+    if (*list == NULL)
+	return;
 
-    if (res == 0) {
-	unsigned offset;
-	char buf[512];
-
-	offset = table->keytable[mid].offset;
-	fseek(table->file, offset, SEEK_SET);
-
-	while (fgets(buf, sizeof(buf), table->file) != NULL) {
-	    char* save = NULL;
-	    char* p = strtok_r(buf, ":", &save);
-	    res = strcmp(p, key);
-	    if (res == 0) {
-                if (*list == NULL) {
-                    *list = hanja_list_new(key);
-                }
-
-                if (*list == NULL) {
-                    break;
-                }
-
-		char* value   = strtok_r(NULL, ":", &save);
-		char* comment = strtok_r(NULL, "\r\n", &save);
-
-		Hanja* hanja = hanja_new(p, value, comment);
-
-		hanja_list_append_n(*list, hanja, 1);
-	    } else if (res > 0) {
-		break;
-	    }
-	}
+    for (i = 0; i < index->count; ++i) {
+	const Hanja* source = table->key_entries[index->offset + i];
+	Hanja* hanja = hanja_new(hanja_get_key(source), hanja_get_value(source),
+				 hanja_get_comment(source));
+	if (hanja != NULL)
+	    hanja_list_append_n(*list, hanja, 1);
     }
 }
 
@@ -482,16 +681,10 @@ hanja_table_match(const HanjaTable* table,
 HanjaTable*
 hanja_table_load(const char* filename)
 {
-    unsigned nkeys;
     char buf[512];
-    int key_size = 5;
-    char last_key[8] = { '\0', };
     char* save_ptr = NULL;
     char* key;
-    long offset;
-    unsigned i;
     FILE* file;
-    HanjaIndex* keytable;
     HanjaTable* table;
 
     if (filename == NULL)
@@ -506,61 +699,221 @@ hanja_table_load(const char* filename)
 	return NULL;
     }
 
-    nkeys = 0;
-    while (fgets(buf, sizeof(buf), file) != NULL) {
-	/* skip comments and empty lines */
-	if (buf[0] == '#' || buf[0] == '\r' || buf[0] == '\n' || buf[0] == '\0')
-	    continue;
-
-	save_ptr = NULL;
-	key = strtok_r(buf, ":", &save_ptr);
-
-	if (key == NULL || strlen(key) == 0)
-	    continue;
-
-	if (strncmp(last_key, key, key_size) != 0) {
-	    nkeys++;
-	    strncpy(last_key, key, key_size);
-	}
-    }
-
-    rewind(file);
-    keytable = malloc(nkeys * sizeof(keytable[0]));
-    memset(keytable, 0, nkeys * sizeof(keytable[0]));
-
-    i = 0;
-    offset = ftell(file);
-    while (fgets(buf, sizeof(buf), file) != NULL) {
-	/* skip comments and empty lines */
-	if (buf[0] == '#' || buf[0] == '\r' || buf[0] == '\n' || buf[0] == '\0')
-	    continue;
-
-	save_ptr = NULL;
-	key = strtok_r(buf, ":", &save_ptr);
-
-	if (key == NULL || strlen(key) == 0)
-	    continue;
-
-	if (strncmp(last_key, key, key_size) != 0) {
-	    keytable[i].offset = offset;
-	    strncpy(keytable[i].key, key, key_size);
-	    strncpy(last_key, key, key_size);
-	    i++;
-	}
-	offset = ftell(file);
-    }
-
-    table = malloc(sizeof(*table));
+    table = hanja_table_new();
     if (table == NULL) {
-	free(keytable);
 	fclose(file);
 	return NULL;
     }
 
-    table->keytable = keytable;
-    table->nkeys = nkeys;
-    table->key_size = key_size;
-    table->file = file;
+    while (fgets(buf, sizeof(buf), file) != NULL) {
+	char* value;
+	char* comment;
+
+	/* skip comments and empty lines */
+	if (buf[0] == '#' || buf[0] == '\r' || buf[0] == '\n' || buf[0] == '\0')
+	    continue;
+
+	save_ptr = NULL;
+	key = strtok_r(buf, ":", &save_ptr);
+
+	if (key == NULL || strlen(key) == 0)
+	    continue;
+
+	value = strtok_r(NULL, ":", &save_ptr);
+	comment = strtok_r(NULL, "\r\n", &save_ptr);
+	if (value == NULL || value[0] == '\0')
+	    continue;
+
+	if (!hanja_table_append_entry(table, key, value, comment)) {
+	    hanja_table_delete(table);
+	    fclose(file);
+	    return NULL;
+	}
+    }
+
+    fclose(file);
+    if (!hanja_table_build_indexes(table)) {
+	hanja_table_delete(table);
+	return NULL;
+    }
+
+    return table;
+}
+
+HanjaTable*
+hanja_table_load_binary(const char* binary_filename, const char* source_filename)
+{
+    FILE* file;
+    HanjaBinaryHeader header;
+    HanjaTable* table;
+    uint32_t i;
+    uint64_t source_hash = 0;
+
+    if (binary_filename == NULL)
+	return NULL;
+
+    file = fopen(binary_filename, "rb");
+    if (file == NULL)
+	return NULL;
+
+    if (fread(&header, sizeof(header), 1, file) != 1) {
+	fclose(file);
+	return NULL;
+    }
+
+    if (memcmp(header.magic, hanja_binary_magic, sizeof(header.magic)) != 0 ||
+	header.version != hanja_binary_version) {
+	fclose(file);
+	return NULL;
+    }
+
+    if (source_filename != NULL) {
+	source_hash = hanja_file_hash(source_filename);
+	if (source_hash == 0 || header.source_hash != source_hash) {
+	    fclose(file);
+	    return NULL;
+	}
+    }
+
+    table = hanja_table_new();
+    if (table == NULL) {
+	fclose(file);
+	return NULL;
+    }
+
+    for (i = 0; i < header.entry_count; ++i) {
+	uint32_t key_len;
+	uint32_t value_len;
+	uint32_t comment_len;
+	char* key = NULL;
+	char* value = NULL;
+	char* comment = NULL;
+
+	if (fread(&key_len, sizeof(key_len), 1, file) != 1 ||
+	    fread(&value_len, sizeof(value_len), 1, file) != 1 ||
+	    fread(&comment_len, sizeof(comment_len), 1, file) != 1) {
+	    hanja_table_delete(table);
+	    fclose(file);
+	    return NULL;
+	}
+
+	key = malloc((size_t)key_len + 1);
+	value = malloc((size_t)value_len + 1);
+	comment = malloc((size_t)comment_len + 1);
+	if (key == NULL || value == NULL || comment == NULL) {
+	    free(key);
+	    free(value);
+	    free(comment);
+	    hanja_table_delete(table);
+	    fclose(file);
+	    return NULL;
+	}
+
+	if (fread(key, 1, key_len, file) != key_len ||
+	    fread(value, 1, value_len, file) != value_len ||
+	    fread(comment, 1, comment_len, file) != comment_len) {
+	    free(key);
+	    free(value);
+	    free(comment);
+	    hanja_table_delete(table);
+	    fclose(file);
+	    return NULL;
+	}
+	key[key_len] = '\0';
+	value[value_len] = '\0';
+	comment[comment_len] = '\0';
+
+	if (!hanja_table_append_entry(table, key, value, comment)) {
+	    free(key);
+	    free(value);
+	    free(comment);
+	    hanja_table_delete(table);
+	    fclose(file);
+	    return NULL;
+	}
+	free(key);
+	free(value);
+	free(comment);
+    }
+
+    fclose(file);
+    if (!hanja_table_build_indexes(table)) {
+	hanja_table_delete(table);
+	return NULL;
+    }
+
+    return table;
+}
+
+int
+hanja_table_save_binary(const HanjaTable* table, const char* binary_filename,
+			const char* source_filename)
+{
+    FILE* file;
+    HanjaBinaryHeader header;
+    unsigned i;
+
+    if (table == NULL || binary_filename == NULL)
+	return FALSE;
+
+    file = fopen(binary_filename, "wb");
+    if (file == NULL)
+	return FALSE;
+
+    memset(&header, 0, sizeof(header));
+    memcpy(header.magic, hanja_binary_magic, sizeof(header.magic));
+    header.version = hanja_binary_version;
+    header.flags = 0;
+    header.source_hash = hanja_file_hash(source_filename);
+    header.entry_count = table->nentries;
+
+    if (fwrite(&header, sizeof(header), 1, file) != 1) {
+	fclose(file);
+	return FALSE;
+    }
+
+    for (i = 0; i < table->nentries; ++i) {
+	const char* key = hanja_get_key(table->entries[i]);
+	const char* value = hanja_get_value(table->entries[i]);
+	const char* comment = hanja_get_comment(table->entries[i]);
+	uint32_t key_len = (uint32_t)strlen(key);
+	uint32_t value_len = (uint32_t)strlen(value);
+	uint32_t comment_len = (uint32_t)strlen(comment);
+
+	if (fwrite(&key_len, sizeof(key_len), 1, file) != 1 ||
+	    fwrite(&value_len, sizeof(value_len), 1, file) != 1 ||
+	    fwrite(&comment_len, sizeof(comment_len), 1, file) != 1 ||
+	    fwrite(key, 1, key_len, file) != key_len ||
+	    fwrite(value, 1, value_len, file) != value_len ||
+	    fwrite(comment, 1, comment_len, file) != comment_len) {
+	    fclose(file);
+	    return FALSE;
+	}
+    }
+
+    fclose(file);
+    return TRUE;
+}
+
+HanjaTable*
+hanja_table_load_with_binary(const char* filename, const char* binary_filename)
+{
+    HanjaTable* table = NULL;
+
+    if (binary_filename != NULL) {
+	table = hanja_table_load_binary(binary_filename, filename);
+	if (table != NULL)
+	    return table;
+	if (filename == NULL) {
+	    table = hanja_table_load_binary(binary_filename, NULL);
+	    if (table != NULL)
+		return table;
+	}
+    }
+
+    table = hanja_table_load(filename);
+    if (table != NULL && binary_filename != NULL)
+	hanja_table_save_binary(table, binary_filename, filename);
 
     return table;
 }
@@ -574,8 +927,18 @@ void
 hanja_table_delete(HanjaTable *table)
 {
     if (table != NULL) {
+	unsigned i;
+	if (table->entries != NULL) {
+	    for (i = 0; i < table->nentries; ++i)
+		hanja_delete(table->entries[i]);
+	}
+	free(table->entries);
+	free(table->key_entries);
 	free(table->keytable);
-	fclose(table->file);
+	free(table->value_entries);
+	free(table->valuetable);
+	if (table->file != NULL)
+	    fclose(table->file);
 	free(table);
     }
 }
@@ -601,6 +964,35 @@ hanja_table_match_exact(const HanjaTable* table, const char *key)
 	return NULL;
 
     hanja_table_match(table, key, &ret);
+
+    return ret;
+}
+
+HanjaList*
+hanja_table_match_exact_value(const HanjaTable* table, const char *value)
+{
+    HanjaList* ret = NULL;
+    HanjaIndex* index;
+    unsigned i;
+
+    if (value == NULL || value[0] == '\0' || table == NULL)
+	return NULL;
+
+    index = hanja_table_find_index(table->valuetable, table->nvalues, value);
+    if (index == NULL)
+	return NULL;
+
+    ret = hanja_list_new(value);
+    if (ret == NULL)
+	return NULL;
+
+    for (i = 0; i < index->count; ++i) {
+	const Hanja* source = table->value_entries[index->offset + i];
+	Hanja* hanja = hanja_new(value, hanja_get_key(source),
+				 hanja_get_comment(source));
+	if (hanja != NULL)
+	    hanja_list_append_n(ret, hanja, 1);
+    }
 
     return ret;
 }

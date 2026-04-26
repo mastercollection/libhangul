@@ -158,6 +158,11 @@
       <AdditionalDependencies Condition="'$(ExternalKeyboard)'=='YES'">libexpat.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>if not "$(MWIME_SKIP_HANJA_CACHE_POSTBUILD)"=="1" call "$(MSBuildProjectDirectory)\..\..\tools\generate-hanja-cache.cmd" "$(Configuration)" "$(Platform)" --skip-libhangul-build</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemGroup Condition="'$(ConfigurationType)'=='DynamicLibrary'">
     <ResourceCompile Include="win32\libhangul.rc" />
   </ItemGroup>

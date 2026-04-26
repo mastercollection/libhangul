@@ -20,7 +20,9 @@ cmake_minimum_required(VERSION 3.5)
 install(
     FILES
         hanja.txt
+        hanja.bin
         mssymbol.txt
+        mssymbol.bin
     DESTINATION
         "${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME}/hanja"
 )

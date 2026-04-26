@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <wchar.h>
 #include <check.h>
 
@@ -707,6 +708,98 @@ START_TEST(test_hangul_jamo_to_cjamo)
 }
 END_TEST
 
+static bool
+hanja_list_has_value(HanjaList* list, const char* value)
+{
+    int i;
+    int n;
+
+    if (list == NULL || value == NULL)
+	return false;
+
+    n = hanja_list_get_size(list);
+    for (i = 0; i < n; ++i) {
+	const char* item = hanja_list_get_nth_value(list, i);
+	if (item != NULL && strcmp(item, value) == 0)
+	    return true;
+    }
+
+    return false;
+}
+
+static void
+assert_hanja_exact_value(HanjaTable* table, const char* key, const char* value)
+{
+    HanjaList* list;
+
+    list = hanja_table_match_exact(table, key);
+    ck_assert_msg(hanja_list_has_value(list, value),
+		  "missing hanja exact match");
+    hanja_list_delete(list);
+}
+
+static void
+assert_hanja_reverse_value(HanjaTable* table, const char* value,
+			   const char* key)
+{
+    HanjaList* list;
+
+    list = hanja_table_match_exact_value(table, value);
+    ck_assert_msg(hanja_list_has_value(list, key),
+		  "missing hanja reverse exact match");
+    hanja_list_delete(list);
+}
+
+START_TEST(test_hanja_table_binary_and_reverse)
+{
+    const char* hanja_txt = TEST_SOURCE_DIR "/../data/hanja/hanja.txt";
+    const char* symbol_txt = TEST_SOURCE_DIR "/../data/hanja/mssymbol.txt";
+    const char* binary_path = "hanja-test-cache.bin";
+    HanjaTable* txt_table;
+    HanjaTable* binary_table;
+    HanjaTable* fallback_table;
+
+    remove(binary_path);
+
+    txt_table = hanja_table_load(hanja_txt);
+    ck_assert_ptr_nonnull(txt_table);
+    assert_hanja_exact_value(txt_table, "\xED\x95\x9C", "\xE9\x9F\x93");
+    assert_hanja_exact_value(txt_table, "\xED\x95\x9C\xEA\xB5\xAD",
+			     "\xE9\x9F\x93\xE5\x9C\x8B");
+    assert_hanja_exact_value(txt_table, "\xED\x8F\xAD\xEB\xA0\xAC",
+			     "\xE7\x88\x86\xE8\xA3\x82");
+    assert_hanja_exact_value(txt_table, "\xEC\xB2\x9C\xEC\x82\xAC",
+			     "\xE5\xA4\xA9\xE4\xBD\xBF");
+    assert_hanja_reverse_value(txt_table, "\xE5\xAE\x89\xE5\xAF\xA7",
+			       "\xEC\x95\x88\xEB\x85\x95");
+    assert_hanja_reverse_value(txt_table, "\xE7\x88\x86\xE8\xA3\x82",
+			       "\xED\x8F\xAD\xEB\xA0\xAC");
+    assert_hanja_reverse_value(txt_table, "\xE5\xA4\xA9\xE4\xBD\xBF",
+			       "\xEC\xB2\x9C\xEC\x82\xAC");
+
+    ck_assert(hanja_table_save_binary(txt_table, binary_path, hanja_txt));
+
+    binary_table = hanja_table_load_with_binary(hanja_txt, binary_path);
+    ck_assert_ptr_nonnull(binary_table);
+    assert_hanja_exact_value(binary_table, "\xED\x95\x9C", "\xE9\x9F\x93");
+    assert_hanja_exact_value(binary_table, "\xED\x95\x9C\xEA\xB5\xAD",
+			     "\xE9\x9F\x93\xE5\x9C\x8B");
+    assert_hanja_exact_value(binary_table, "\xED\x8F\xAD\xEB\xA0\xAC",
+			     "\xE7\x88\x86\xE8\xA3\x82");
+    assert_hanja_exact_value(binary_table, "\xEC\xB2\x9C\xEC\x82\xAC",
+			     "\xE5\xA4\xA9\xE4\xBD\xBF");
+
+    fallback_table = hanja_table_load_with_binary(symbol_txt, binary_path);
+    ck_assert_ptr_nonnull(fallback_table);
+    assert_hanja_exact_value(fallback_table, "\xE3\x85\x81", "\xE2\x80\xBB");
+
+    hanja_table_delete(fallback_table);
+    hanja_table_delete(binary_table);
+    hanja_table_delete(txt_table);
+    remove(binary_path);
+}
+END_TEST
+
 Suite* libhangul_suite()
 {
     Suite* s = suite_create("libhangul");
@@ -728,6 +821,10 @@ Suite* libhangul_suite()
 #endif /* ENABLE_EXTERNAL_KEYBOARDS */
     tcase_add_test(hangul, test_hangul_jamo_to_cjamo);
     suite_add_tcase(s, hangul);
+
+    TCase* hanja = tcase_create("hanja");
+    tcase_add_test(hanja, test_hanja_table_binary_and_reverse);
+    suite_add_tcase(s, hanja);
 
     return s;
 }
