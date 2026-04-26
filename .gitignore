@@ -50,3 +50,7 @@ tools/hangul
 */*.o
 */.deps
 */.libs
+
+# MSVC build outputs
+/Win32/
+/x64/
