@@ -29,11 +29,33 @@ ucschar hangul_choseong_to_jongseong(ucschar ch);
 ucschar hangul_jongseong_to_choseong(ucschar ch);
 void    hangul_jongseong_decompose(ucschar ch, ucschar* jong, ucschar* cho);
 
+typedef enum {
+    HANGUL_SHINSEBEOL_KEYVALUE_PASS,
+    HANGUL_SHINSEBEOL_KEYVALUE_CHOSEONG,
+    HANGUL_SHINSEBEOL_KEYVALUE_JUNGSEONG,
+    HANGUL_SHINSEBEOL_KEYVALUE_JONGSEONG,
+    HANGUL_SHINSEBEOL_KEYVALUE_CHO_JUNG,
+    HANGUL_SHINSEBEOL_KEYVALUE_JUNG_JONG,
+    HANGUL_SHINSEBEOL_KEYVALUE_CHO_JONG,
+} HangulShinsebeolKeyValueType;
+
+typedef struct _HangulShinsebeolKeyValue {
+    HangulShinsebeolKeyValueType type;
+    ucschar choseong;
+    ucschar jungseong;
+    ucschar jongseong;
+    ucschar pass;
+    bool first;
+    bool compose;
+} HangulShinsebeolKeyValue;
+
 int     hangul_keyboard_get_type(const HangulKeyboard *keyboard);
 ucschar hangul_keyboard_combine(const HangulKeyboard* keyboard,
 	    unsigned id, ucschar first, ucschar second);
 ucschar hangul_keyboard_map_to_char(const HangulKeyboard* keyboard,
 	    int tableid, unsigned key);
+bool    hangul_keyboard_decode_shinsebeol_keyvalue(ucschar ch,
+	    HangulShinsebeolKeyValue* value);
 
 int hangul_keyboard_list_init(const char* user_defined_keyboard_path);
 int hangul_keyboard_list_fini();

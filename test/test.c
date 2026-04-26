@@ -107,6 +107,27 @@ check_commit(const char* keyboard, const char* input, const wchar_t* output)
     return res;
 }
 
+static bool
+check_process_step(HangulInputContext* ic, int ascii,
+		   const wchar_t* preedit_output,
+		   const wchar_t* commit_output)
+{
+    const ucschar* preedit;
+    const ucschar* commit;
+    int preedit_res;
+    int commit_res;
+
+    hangul_ic_process(ic, ascii);
+
+    preedit = hangul_ic_get_preedit_string(ic);
+    commit = hangul_ic_get_commit_string(ic);
+
+    preedit_res = wcscmp((const wchar_t*)preedit, preedit_output);
+    commit_res = wcscmp((const wchar_t*)commit, commit_output);
+
+    return preedit_res == 0 && commit_res == 0;
+}
+
 START_TEST(test_hangul_ic_process_2)
 {
     /* ㄱㅏㅉ */
@@ -222,6 +243,99 @@ START_TEST(test_hangul_ic_process_3s)
 {
     /* ㅎㅐㅅㅅ */
     ck_assert(check_preedit("3s", "mrqq", L"했"));
+}
+END_TEST
+
+START_TEST(test_hangul_ic_process_3sin_1995)
+{
+    HangulInputContext* ic;
+
+    ck_assert(check_preedit("3sin-1995", "uq", L"듸"));
+    ck_assert(check_preedit("3sin-1995", "ii", L"무"));
+
+    ic = get_ic("3sin-1995");
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L""));
+    ck_assert(check_process_step(ic, 'f', L"아", L""));
+    ck_assert(check_process_step(ic, 's', L"안", L""));
+    ck_assert(check_process_step(ic, 'h', L"ㄴ", L"안"));
+    ck_assert(check_process_step(ic, 'e', L"녀", L""));
+    ck_assert(check_process_step(ic, 'a', L"녕", L""));
+    ck_assert(check_process_step(ic, 'm', L"ㅎ", L"녕"));
+    ck_assert(check_process_step(ic, 'f', L"하", L""));
+    ck_assert(check_process_step(ic, 'n', L"ㅅ", L"하"));
+    ck_assert(check_process_step(ic, 'c', L"세", L""));
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L"세"));
+    ck_assert(check_process_step(ic, 'x', L"요", L""));
+
+    ic = get_ic("3sin-1995");
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L""));
+    ck_assert(check_process_step(ic, 'o', L"우", L""));
+    ck_assert(check_process_step(ic, 'c', L"웨", L""));
+    ck_assert(check_process_step(ic, 's', L"웬", L""));
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L"웬"));
+    ck_assert(check_process_step(ic, 'p', L"오", L""));
+    ck_assert(check_process_step(ic, 'd', L"외", L""));
+
+    ic = get_ic("3sin-1995");
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L""));
+    ck_assert(check_process_step(ic, 'b', L"우", L""));
+    ck_assert(check_process_step(ic, 'c', L"웇", L""));
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L"웇"));
+    ck_assert(check_process_step(ic, 'v', L"오", L""));
+    ck_assert(check_process_step(ic, 'd', L"옿", L""));
+
+    ck_assert(check_preedit("3sin-1995", "joc", L"웨"));
+    ck_assert(hangul_ic_backspace(get_ic("3sin-1995")) == false);
+
+    ic = get_ic("3sin-1995");
+    hangul_ic_process(ic, 'j');
+    hangul_ic_process(ic, 'o');
+    hangul_ic_process(ic, 'c');
+    ck_assert(hangul_ic_backspace(ic) == true);
+    ck_assert(wcscmp((const wchar_t*)hangul_ic_get_preedit_string(ic), L"우") == 0);
+    ck_assert(hangul_ic_backspace(ic) == true);
+    ck_assert(wcscmp((const wchar_t*)hangul_ic_get_preedit_string(ic), L"ㅇ") == 0);
+}
+END_TEST
+
+START_TEST(test_hangul_ic_process_3sin_p2)
+{
+    HangulInputContext* ic;
+
+    ck_assert(check_preedit("3sin-p2", "uz", L"듸"));
+    ck_assert(check_preedit("3sin-p2", "oo", L"추"));
+
+    ic = get_ic("3sin-p2");
+    ck_assert(check_process_step(ic, 't', L"ㅋ", L""));
+    ck_assert(check_process_step(ic, 't', L"ㅋ", L"ㅋ"));
+
+    ic = get_ic("3sin-p2");
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L""));
+    ck_assert(check_process_step(ic, 'f', L"아", L""));
+    ck_assert(check_process_step(ic, 's', L"안", L""));
+    ck_assert(check_process_step(ic, 'h', L"ㄴ", L"안"));
+    ck_assert(check_process_step(ic, 't', L"녀", L""));
+    ck_assert(check_process_step(ic, 'a', L"녕", L""));
+    ck_assert(check_process_step(ic, 'm', L"ㅎ", L"녕"));
+    ck_assert(check_process_step(ic, 'f', L"하", L""));
+    ck_assert(check_process_step(ic, 'n', L"ㅅ", L"하"));
+    ck_assert(check_process_step(ic, 'c', L"세", L""));
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L"세"));
+    ck_assert(check_process_step(ic, 'x', L"요", L""));
+
+    ic = get_ic("3sin-p2");
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L""));
+    ck_assert(check_process_step(ic, 'o', L"우", L""));
+    ck_assert(check_process_step(ic, 'c', L"웨", L""));
+    ck_assert(check_process_step(ic, 's', L"웬", L""));
+    ck_assert(check_process_step(ic, 'j', L"ㅇ", L"웬"));
+    ck_assert(check_process_step(ic, '/', L"오", L""));
+    ck_assert(check_process_step(ic, 'd', L"외", L""));
+
+    ic = get_ic("3sin-p2");
+    hangul_ic_process(ic, 'j');
+    hangul_ic_process(ic, 'f');
+    ck_assert(check_process_step(ic, 'Y', L"", L"아\x00d7"));
 }
 END_TEST
 
@@ -602,6 +716,8 @@ Suite* libhangul_suite()
     tcase_add_test(hangul, test_hangul_ic_process_2y);
     tcase_add_test(hangul, test_hangul_ic_process_3f);
     tcase_add_test(hangul, test_hangul_ic_process_3s);
+    tcase_add_test(hangul, test_hangul_ic_process_3sin_1995);
+    tcase_add_test(hangul, test_hangul_ic_process_3sin_p2);
     tcase_add_test(hangul, test_hangul_ic_process_romaja);
     tcase_add_test(hangul, test_hangul_ic_auto_reorder);
     tcase_add_test(hangul, test_hangul_ic_combi_on_double_stroke);

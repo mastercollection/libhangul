@@ -192,8 +192,10 @@ struct _HangulBuffer {
     ucschar choseong;
     ucschar jungseong;
     ucschar jongseong;
+    bool compose_jung;
 
     ucschar stack[12];
+    bool    compose_jung_stack[12];
     int     index;
 };
 
@@ -223,6 +225,8 @@ struct _HangulInputContext {
 };
 
 static void    hangul_buffer_push(HangulBuffer *buffer, ucschar ch);
+static void    hangul_buffer_push_with_jung_compose(HangulBuffer *buffer,
+		    ucschar ch, bool compose);
 static ucschar hangul_buffer_pop (HangulBuffer *buffer);
 static ucschar hangul_buffer_peek(HangulBuffer *buffer);
 
@@ -261,16 +265,27 @@ hangul_buffer_has_jongseong(HangulBuffer *buffer)
 static void
 hangul_buffer_push(HangulBuffer *buffer, ucschar ch)
 {
+    hangul_buffer_push_with_jung_compose(buffer, ch, true);
+}
+
+static void
+hangul_buffer_push_with_jung_compose(HangulBuffer *buffer, ucschar ch,
+				     bool compose)
+{
     if (hangul_is_choseong(ch)) {
 	buffer->choseong = ch;
     } else if (hangul_is_jungseong(ch)) {
 	buffer->jungseong = ch;
+	buffer->compose_jung = compose;
     } else if (hangul_is_jongseong(ch)) {
 	buffer->jongseong = ch;
     } else {
     }
 
-    buffer->stack[++buffer->index] = ch;
+    buffer->index++;
+    buffer->stack[buffer->index] = ch;
+    buffer->compose_jung_stack[buffer->index] = hangul_is_jungseong(ch) ?
+						compose : false;
 }
 
 static ucschar
@@ -294,6 +309,7 @@ hangul_buffer_clear(HangulBuffer *buffer)
     buffer->choseong = 0;
     buffer->jungseong = 0;
     buffer->jongseong = 0;
+    buffer->compose_jung = false;
 
     buffer->index = -1;
     buffer->stack[0]  = 0;
@@ -308,6 +324,18 @@ hangul_buffer_clear(HangulBuffer *buffer)
     buffer->stack[9]  = 0;
     buffer->stack[10] = 0;
     buffer->stack[11] = 0;
+    buffer->compose_jung_stack[0]  = false;
+    buffer->compose_jung_stack[1]  = false;
+    buffer->compose_jung_stack[2]  = false;
+    buffer->compose_jung_stack[3]  = false;
+    buffer->compose_jung_stack[4]  = false;
+    buffer->compose_jung_stack[5]  = false;
+    buffer->compose_jung_stack[6]  = false;
+    buffer->compose_jung_stack[7]  = false;
+    buffer->compose_jung_stack[8]  = false;
+    buffer->compose_jung_stack[9]  = false;
+    buffer->compose_jung_stack[10] = false;
+    buffer->compose_jung_stack[11] = false;
 }
 
 static int
@@ -437,6 +465,8 @@ hangul_buffer_backspace(HangulBuffer *buffer)
 	    } else if (hangul_is_jungseong(ch)) {
 		ch = hangul_buffer_peek(buffer);
 		buffer->jungseong = hangul_is_jungseong(ch) ? ch : 0;
+		buffer->compose_jung = hangul_is_jungseong(ch) ?
+		    buffer->compose_jung_stack[buffer->index] : false;
 		return true;
 	    } else if (hangul_is_jongseong(ch)) {
 		ch = hangul_buffer_peek(buffer);
@@ -447,6 +477,7 @@ hangul_buffer_backspace(HangulBuffer *buffer)
 	    buffer->choseong = 0;
 	    buffer->jungseong = 0;
 	    buffer->jongseong = 0;
+	    buffer->compose_jung = false;
 	    return true;
 	}
     }
@@ -454,7 +485,8 @@ hangul_buffer_backspace(HangulBuffer *buffer)
 }
 
 static inline bool
-hangul_ic_push(HangulInputContext *hic, ucschar c)
+hangul_ic_push_with_jung_compose(HangulInputContext *hic, ucschar c,
+				 bool compose_jung)
 {
     ucschar buf[64] = { 0, };
     if (hic->on_transition != NULL) {
@@ -488,8 +520,14 @@ hangul_ic_push(HangulInputContext *hic, ucschar c)
 	}
     }
 
-    hangul_buffer_push(&hic->buffer, c);
+    hangul_buffer_push_with_jung_compose(&hic->buffer, c, compose_jung);
     return true;
+}
+
+static inline bool
+hangul_ic_push(HangulInputContext *hic, ucschar c)
+{
+    return hangul_ic_push_with_jung_compose(hic, c, true);
 }
 
 static inline ucschar
@@ -872,6 +910,190 @@ hangul_ic_process_jaso(HangulInputContext *hic, ucschar ch)
     return true;
 }
 
+static ucschar
+hangul_ic_shinsebeol_try_add_jungseong(HangulInputContext *hic,
+				       ucschar jung, bool compose)
+{
+    if (!hic->buffer.jungseong)
+	return 0;
+
+    if (!hic->buffer.compose_jung && !compose)
+	return 0;
+
+    ucschar combined = hangul_ic_combine(hic, hic->buffer.jungseong, jung);
+    return hangul_is_jungseong(combined) ? combined : 0;
+}
+
+static bool
+hangul_ic_shinsebeol_set_new_state(HangulInputContext *hic,
+				   ucschar cho, ucschar jung,
+				   bool compose, ucschar jong)
+{
+    hangul_ic_save_commit_string(hic);
+
+    if (cho && !hangul_ic_push_with_jung_compose(hic, cho, false))
+	return false;
+
+    if (jung && !hangul_ic_push_with_jung_compose(hic, jung, compose))
+	return false;
+
+    if (jong && !hangul_ic_push_with_jung_compose(hic, jong, false))
+	return false;
+
+    return true;
+}
+
+static bool
+hangul_ic_process_shinsebeol_choseong(HangulInputContext *hic, ucschar cho)
+{
+    if (hic->buffer.choseong) {
+	if (hic->buffer.jungseong || hic->buffer.jongseong) {
+	    return hangul_ic_shinsebeol_set_new_state(hic, cho, 0, false, 0);
+	} else {
+	    ucschar combined = hangul_ic_combine(hic, hic->buffer.choseong, cho);
+	    if (hangul_is_choseong(combined))
+		return hangul_ic_push_with_jung_compose(hic, combined, false);
+
+	    return hangul_ic_shinsebeol_set_new_state(hic, cho, 0, false, 0);
+	}
+    } else if (!hic->buffer.jungseong && !hic->buffer.jongseong) {
+	return hangul_ic_push_with_jung_compose(hic, cho, false);
+    } else {
+	return hangul_ic_shinsebeol_set_new_state(hic, cho, 0, false, 0);
+    }
+}
+
+static bool
+hangul_ic_process_shinsebeol_jungseong(HangulInputContext *hic,
+				       ucschar jung, bool compose)
+{
+    if (hic->buffer.jungseong) {
+	ucschar combined = hangul_ic_shinsebeol_try_add_jungseong(hic,
+								jung, compose);
+	if (combined)
+	    return hangul_ic_push_with_jung_compose(hic, combined, false);
+
+	return hangul_ic_shinsebeol_set_new_state(hic, 0, jung, compose, 0);
+    } else if (hic->buffer.jongseong) {
+	return hangul_ic_shinsebeol_set_new_state(hic, 0, jung, compose, 0);
+    } else {
+	return hangul_ic_push_with_jung_compose(hic, jung, compose);
+    }
+}
+
+static bool
+hangul_ic_process_shinsebeol_jongseong(HangulInputContext *hic, ucschar jong)
+{
+    if (hic->buffer.jongseong) {
+	ucschar combined = hangul_ic_combine(hic, hic->buffer.jongseong, jong);
+	if (hangul_is_jongseong(combined))
+	    return hangul_ic_push_with_jung_compose(hic, combined, false);
+
+	return hangul_ic_shinsebeol_set_new_state(hic, 0, 0, false, jong);
+    }
+
+    return hangul_ic_push_with_jung_compose(hic, jong, false);
+}
+
+static bool
+hangul_ic_process_shinsebeol_cho_jung(HangulInputContext *hic,
+				      ucschar cho, ucschar jung,
+				      bool first, bool compose)
+{
+    if (hic->buffer.choseong &&
+	(!hic->buffer.jungseong ||
+	 hangul_ic_shinsebeol_try_add_jungseong(hic, jung, compose))) {
+	return hangul_ic_process_shinsebeol_jungseong(hic, jung, compose);
+    } else if (!hic->buffer.choseong || first) {
+	return hangul_ic_process_shinsebeol_choseong(hic, cho);
+    } else {
+	return hangul_ic_process_shinsebeol_jungseong(hic, jung, compose);
+    }
+}
+
+static bool
+hangul_ic_process_shinsebeol_jung_jong(HangulInputContext *hic,
+				       ucschar jung, ucschar jong,
+				       bool first, bool compose)
+{
+    if (!hic->buffer.choseong && !hic->buffer.jungseong) {
+	if (first)
+	    return hangul_ic_process_shinsebeol_jungseong(hic, jung, compose);
+	else
+	    return hangul_ic_process_shinsebeol_jongseong(hic, jong);
+    } else if (hic->buffer.choseong &&
+	       (!hic->buffer.jungseong ||
+		hangul_ic_shinsebeol_try_add_jungseong(hic, jung, compose))) {
+	return hangul_ic_process_shinsebeol_jungseong(hic, jung, compose);
+    } else {
+	return hangul_ic_process_shinsebeol_jongseong(hic, jong);
+    }
+}
+
+static bool
+hangul_ic_process_shinsebeol_cho_jong(HangulInputContext *hic,
+				      ucschar cho, ucschar jong, bool first)
+{
+    if (!hic->buffer.choseong || !hic->buffer.jungseong) {
+	return hangul_ic_process_shinsebeol_choseong(hic, cho);
+    } else if (hic->buffer.jungseong || !first) {
+	return hangul_ic_process_shinsebeol_jongseong(hic, jong);
+    } else {
+	return hangul_ic_process_shinsebeol_choseong(hic, cho);
+    }
+}
+
+static bool
+hangul_ic_process_shinsebeol(HangulInputContext *hic, ucschar ch)
+{
+    HangulShinsebeolKeyValue value;
+    bool ret = false;
+
+    if (!hangul_keyboard_decode_shinsebeol_keyvalue(ch, &value)) {
+	hangul_ic_save_commit_string(hic);
+	return false;
+    }
+
+    switch (value.type) {
+    case HANGUL_SHINSEBEOL_KEYVALUE_PASS:
+	hangul_ic_save_commit_string(hic);
+	hangul_ic_append_commit_string(hic, value.pass);
+	return true;
+    case HANGUL_SHINSEBEOL_KEYVALUE_CHOSEONG:
+	ret = hangul_ic_process_shinsebeol_choseong(hic, value.choseong);
+	break;
+    case HANGUL_SHINSEBEOL_KEYVALUE_JUNGSEONG:
+	ret = hangul_ic_process_shinsebeol_jungseong(hic, value.jungseong,
+						    value.compose);
+	break;
+    case HANGUL_SHINSEBEOL_KEYVALUE_JONGSEONG:
+	ret = hangul_ic_process_shinsebeol_jongseong(hic, value.jongseong);
+	break;
+    case HANGUL_SHINSEBEOL_KEYVALUE_CHO_JUNG:
+	ret = hangul_ic_process_shinsebeol_cho_jung(hic, value.choseong,
+						   value.jungseong,
+						   value.first,
+						   value.compose);
+	break;
+    case HANGUL_SHINSEBEOL_KEYVALUE_JUNG_JONG:
+	ret = hangul_ic_process_shinsebeol_jung_jong(hic, value.jungseong,
+						    value.jongseong,
+						    value.first,
+						    value.compose);
+	break;
+    case HANGUL_SHINSEBEOL_KEYVALUE_CHO_JONG:
+	ret = hangul_ic_process_shinsebeol_cho_jong(hic, value.choseong,
+						   value.jongseong,
+						   value.first);
+	break;
+    }
+
+    if (ret)
+	hangul_ic_save_preedit_string(hic);
+
+    return ret;
+}
+
 static bool
 hangul_ic_process_romaja(HangulInputContext *hic, int ascii, ucschar ch)
 {
@@ -1099,6 +1321,8 @@ hangul_ic_process(HangulInputContext *hic, int ascii)
 	return hangul_ic_process_jaso(hic, c);
     case HANGUL_KEYBOARD_TYPE_ROMAJA:
 	return hangul_ic_process_romaja(hic, ascii, c);
+    case HANGUL_KEYBOARD_TYPE_SHINSEBEOL:
+	return hangul_ic_process_shinsebeol(hic, c);
     default:
 	return hangul_ic_process_jamo(hic, c);
     }

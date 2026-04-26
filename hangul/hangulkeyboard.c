@@ -100,7 +100,12 @@ typedef struct _HangulKeyboardList {
     HangulKeyboard** keyboards;
 } HangulKeyboardList;
 
+#define SHINSEBEOL_KEYVALUE_BASE 0x01100000
+#define SHINSEBEOL_KV(id) (SHINSEBEOL_KEYVALUE_BASE + (id))
+
 #include "hangulkeyboard.h"
+
+#undef SHINSEBEOL_KV
 
 static const HangulCombination hangul_combination_default = {
     countof(hangul_combination_table_default),
@@ -129,6 +134,124 @@ static const HangulCombination hangul_combination_ahn = {
     (HangulCombinationItem*)hangul_combination_table_ahn,
     true
 };
+
+#define SHIN_PASS(ch) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_PASS, 0, 0, 0, ch, false, false }
+#define SHIN_CHO(cho) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_CHOSEONG, cho, 0, 0, 0, false, false }
+#define SHIN_JUNG(jung, compose_) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_JUNGSEONG, 0, jung, 0, 0, false, compose_ }
+#define SHIN_JONG(jong) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_JONGSEONG, 0, 0, jong, 0, false, false }
+#define SHIN_CHO_JUNG(cho, jung, first_, compose_) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_CHO_JUNG, cho, jung, 0, 0, first_, compose_ }
+#define SHIN_JUNG_JONG(jung, jong, first_, compose_) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_JUNG_JONG, 0, jung, jong, 0, first_, compose_ }
+#define SHIN_CHO_JONG(cho, jong, first_) \
+    { HANGUL_SHINSEBEOL_KEYVALUE_CHO_JONG, cho, 0, jong, 0, first_, false }
+
+static const HangulShinsebeolKeyValue hangul_shinsebeol_keyvalues[] = {
+    SHIN_JUNG_JONG(0x1174, 0x11ba, false, false),
+    SHIN_JUNG_JONG(0x1163, 0x11af, false, false),
+    SHIN_JUNG_JONG(0x1167, 0x11b8, false, false),
+    SHIN_JUNG_JONG(0x1162, 0x11ae, false, false),
+    SHIN_JUNG_JONG(0x1165, 0x11c0, false, false),
+    SHIN_JUNG_JONG(0x1164, 0x11bc, false, false),
+    SHIN_JUNG_JONG(0x1168, 0x11ab, false, false),
+    SHIN_JUNG_JONG(0x1175, 0x11c2, false, false),
+    SHIN_JUNG_JONG(0x1161, 0x11bd, false, false),
+    SHIN_JUNG_JONG(0x1173, 0x11c1, false, false),
+    SHIN_JUNG_JONG(0x1172, 0x11b7, false, false),
+    SHIN_JUNG_JONG(0x116d, 0x11a8, false, false),
+    SHIN_JUNG_JONG(0x1166, 0x11be, false, false),
+    SHIN_JUNG_JONG(0x1169, 0x11bf, false, false),
+    SHIN_JUNG_JONG(0x116e, 0x11bb, false, false),
+    SHIN_JUNG(0x1174, false),
+    SHIN_JUNG(0x1163, false),
+    SHIN_JUNG(0x1167, false),
+    SHIN_JUNG(0x1162, false),
+    SHIN_JUNG(0x1165, false),
+    SHIN_JUNG(0x1164, false),
+    SHIN_JUNG(0x1168, false),
+    SHIN_JUNG(0x1175, false),
+    SHIN_JUNG(0x1161, false),
+    SHIN_JUNG(0x1173, false),
+    SHIN_JUNG(0x1172, false),
+    SHIN_JUNG(0x116d, false),
+    SHIN_JUNG(0x1166, false),
+    SHIN_JUNG(0x1169, false),
+    SHIN_JUNG(0x116e, false),
+    SHIN_CHO(0x1105),
+    SHIN_CHO(0x1103),
+    SHIN_CHO_JUNG(0x1106, 0x116e, true, true),
+    SHIN_CHO_JUNG(0x110e, 0x116e, true, true),
+    SHIN_CHO_JUNG(0x1111, 0x1169, true, true),
+    SHIN_CHO(0x1102),
+    SHIN_CHO(0x110b),
+    SHIN_CHO(0x1100),
+    SHIN_CHO(0x110c),
+    SHIN_CHO(0x1107),
+    SHIN_CHO(0x1110),
+    SHIN_CHO(0x1109),
+    SHIN_CHO(0x1112),
+    SHIN_CHO(0x110f),
+    SHIN_JUNG(0x116e, true),
+    SHIN_JUNG(0x1169, true),
+    SHIN_JUNG(0x1173, true),
+    SHIN_JUNG(0x1174, true),
+    SHIN_JUNG_JONG(0x1164, 0x11ba, false, false),
+    SHIN_JUNG_JONG(0x1162, 0x11b8, false, false),
+    SHIN_JUNG_JONG(0x1165, 0x11c0, false, false),
+    SHIN_JUNG_JONG(0x1167, 0x11bf, false, false),
+    SHIN_JUNG_JONG(0x1172, 0x11bc, false, false),
+    SHIN_JUNG_JONG(0x1161, 0x11c1, false, false),
+    SHIN_JUNG_JONG(0x1173, 0x11ae, false, false),
+    SHIN_JUNG_JONG(0x1174, 0x11b7, false, true),
+    SHIN_JUNG_JONG(0x116d, 0x11bb, false, false),
+    SHIN_JUNG_JONG(0x1166, 0x11a8, false, false),
+    SHIN_JUNG_JONG(0x1169, 0x11bd, false, false),
+    SHIN_JUNG_JONG(0x116e, 0x11be, false, false),
+    SHIN_CHO_JUNG(0x1106, 0x1173, true, true),
+    SHIN_CHO(0x1111),
+    SHIN_CHO_JUNG(0x110f, 0x1169, true, true),
+};
+
+#undef SHIN_PASS
+#undef SHIN_CHO
+#undef SHIN_JUNG
+#undef SHIN_JONG
+#undef SHIN_CHO_JUNG
+#undef SHIN_JUNG_JONG
+#undef SHIN_CHO_JONG
+
+bool
+hangul_keyboard_decode_shinsebeol_keyvalue(ucschar ch,
+					   HangulShinsebeolKeyValue* value)
+{
+    if (value == NULL)
+	return false;
+
+    if (ch == 0)
+	return false;
+
+    if (ch >= SHINSEBEOL_KEYVALUE_BASE) {
+	unsigned int index = ch - SHINSEBEOL_KEYVALUE_BASE;
+	if (index >= countof(hangul_shinsebeol_keyvalues))
+	    return false;
+
+	*value = hangul_shinsebeol_keyvalues[index];
+	return true;
+    }
+
+    value->type = HANGUL_SHINSEBEOL_KEYVALUE_PASS;
+    value->choseong = 0;
+    value->jungseong = 0;
+    value->jongseong = 0;
+    value->pass = ch;
+    value->first = false;
+    value->compose = false;
+    return true;
+}
 
 static const HangulKeyboard hangul_keyboard_2 = {
     (char*)"2",
@@ -211,6 +334,24 @@ static const HangulKeyboard hangul_keyboard_ahn = {
     true
 };
 
+static const HangulKeyboard hangul_keyboard_3sin_1995 = {
+    (char*)"3sin-1995",
+    (char*)N_("Shin Sebeolsik 1995"),
+    { (ucschar*)hangul_keyboard_table_3sin_1995, NULL, NULL, NULL },
+    { (HangulCombination*)&hangul_combination_default, NULL, NULL, NULL },
+    HANGUL_KEYBOARD_TYPE_SHINSEBEOL,
+    true
+};
+
+static const HangulKeyboard hangul_keyboard_3sin_p2 = {
+    (char*)"3sin-p2",
+    (char*)N_("Shin Sebeolsik P2"),
+    { (ucschar*)hangul_keyboard_table_3sin_p2, NULL, NULL, NULL },
+    { (HangulCombination*)&hangul_combination_default, NULL, NULL, NULL },
+    HANGUL_KEYBOARD_TYPE_SHINSEBEOL,
+    true
+};
+
 static const HangulKeyboard* hangul_builtin_keyboards[] = {
     &hangul_keyboard_2,
     &hangul_keyboard_2y,
@@ -218,6 +359,8 @@ static const HangulKeyboard* hangul_builtin_keyboards[] = {
     &hangul_keyboard_3final,
     &hangul_keyboard_3sun,
     &hangul_keyboard_3yet,
+    &hangul_keyboard_3sin_1995,
+    &hangul_keyboard_3sin_p2,
     &hangul_keyboard_32,
     &hangul_keyboard_romaja,
     &hangul_keyboard_ahn,
@@ -608,6 +751,8 @@ on_element_start(void* data, const XML_Char* element, const XML_Char** attr)
 	    type = HANGUL_KEYBOARD_TYPE_JASO_YET;
 	} else if (strcmp(typestr, "romaja") == 0) {
 	    type = HANGUL_KEYBOARD_TYPE_ROMAJA;
+	} else if (strcmp(typestr, "shinsebeol") == 0) {
+	    type = HANGUL_KEYBOARD_TYPE_SHINSEBEOL;
 	}
 
 	hangul_keyboard_set_type(context->keyboard, type);

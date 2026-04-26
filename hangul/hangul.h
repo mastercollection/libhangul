@@ -87,6 +87,7 @@ enum {
     HANGUL_KEYBOARD_TYPE_ROMAJA,
     HANGUL_KEYBOARD_TYPE_JAMO_YET,
     HANGUL_KEYBOARD_TYPE_JASO_YET,
+    HANGUL_KEYBOARD_TYPE_SHINSEBEOL,
 };
 
 enum {
@@ -154,7 +155,16 @@ typedef struct _HanjaList HanjaList;
 typedef struct _HanjaTable HanjaTable;
 
 HanjaTable*  hanja_table_load(const char *filename);
+HanjaTable*  hanja_table_load_binary(const char *binary_filename,
+				      const char *source_filename);
+int          hanja_table_save_binary(const HanjaTable *table,
+				      const char *binary_filename,
+				      const char *source_filename);
+HanjaTable*  hanja_table_load_with_binary(const char *filename,
+					   const char *binary_filename);
 HanjaList*   hanja_table_match_exact(const HanjaTable* table, const char *key);
+HanjaList*   hanja_table_match_exact_value(const HanjaTable* table,
+					    const char *value);
 HanjaList*   hanja_table_match_prefix(const HanjaTable* table, const char *key);
 HanjaList*   hanja_table_match_suffix(const HanjaTable* table, const char *key);
 void         hanja_table_delete(HanjaTable *table);
